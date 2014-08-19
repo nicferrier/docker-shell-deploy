@@ -81,3 +81,28 @@ This is //very// imperfect. It has a lot of assumptions:
 * ... and that's just for starters
 
 However, it's a start and it is repeatable.
+
+=== is the download safe? ===
+
+Perhaps you've heard that doing:
+
+{{{
+curl http://something | bash -
+}}}
+
+is unsafe. Is:
+
+{{{
+bash <(curl http://something)
+}}}
+
+any safer?
+
+NO! Never use a curl and a bash together if you don't know what
+they're doing. It's completely mad.
+
+However, once you are confident of the script then you can do it.
+
+If you're not confident of what the script does
+then
+[[https://github.com/nicferrier/docker-shell-deploy/blob/master/deploy-make|go look at it]].
