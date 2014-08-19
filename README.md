@@ -17,8 +17,13 @@ You need:
 
 ### how to
 
+<<<<<<< HEAD
 ```shell-session
 $ bash <(curl -L https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
+=======
+```bashsession
+$ bash <(curl https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
+>>>>>>> 8a2c5efd82c5b481cf3e5c97f88d6fcb90cb3c6c
 ```
 
 will download the script and ask a few questions:
