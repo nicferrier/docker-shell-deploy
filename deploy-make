@@ -6,7 +6,7 @@
 #
 # If you want to download and use then:
 #
-# bash <(curl https://raw.githubusercontent.com/nicferrier/docker-shell-deploy/master/deploy-make)
+# bash <(curl https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
 
 [ -f Dockerfile ] || { echo "No Dockerfile" ; exit 1; }
 dockerExPort=$(sed -rne 's/EXPOSE ([0-9]+)/\1/p' Dockerfile)
