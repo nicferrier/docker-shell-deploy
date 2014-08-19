@@ -1,9 +1,28 @@
 #!/bin/bash
 
-read -p "docker image: " dockerImage
+# Use this like:
+#
+#  bash deploy-make
+#
+# If you want to download and use then:
+#
+# bash <(curl https://raw.githubusercontent.com/nicferrier/docker-shell-deploy/master/deploy-make)
+
+[ -f Dockerfile ] || { echo "No Dockerfile" ; exit 1; }
 dockerExPort=$(sed -rne 's/EXPOSE ([0-9]+)/\1/p' Dockerfile)
+[ $dockerExPort -gt 1000 ] || { echo "Bad exported port in Dockerfile" ; exit 1; }
+
+# Now read some stuff
+read -p "docker image: " dockerImage
 read -p "nginx config: " nginxConfig
 read -p "remote host name: " hostName
+
+# Should we test anything about the hostName here?
+# possibly:
+#
+#   ssh hostName sudo echo done
+# or:
+#   ssh hostName test -f $nginxConfig
 
 url="https://raw.githubusercontent.com/nicferrier/docker-shell-deploy/master/deploy-helpers"
 cat <<EOF > deploy
@@ -24,4 +43,4 @@ EOF
 
 chmod u+x deploy
 
-echo deploy script has been written, now just bash deploy
+echo deploy script has been written, now just:  bash deploy
