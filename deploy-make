@@ -33,7 +33,7 @@ cat <<EOF > deploy
 [ -f ./.deploy ] \
     || curl $url -o ./.deploy \
     || { echo "can't http the deployscript" ; exit 1; }
-. \$0/.deploy
+. ./.deploy
 dockerImage=$dockerImage
 dockerExPort=$dockerExPort
 nginxConfig=$nginxConfig
