@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Functions to help with docker deployment.
+#
+# function deploy rebuilds a dockerfile, pushes the image to docker
+# and then pulls the same docker image on a remote host, rebinds the
+# nginx config there and restarts nginx.
+#
+# function remoteDeploy is a helper function for operating on the
+# remote host.
+
+
+# This is the script run on the remote machine
+# 
+# Call with:
+#
+# $1  the docker image name, eg: nicferrier/elnode-gnudoc
+# $2  the docker exported port which you will connect to nginx
+# $3  the nginx config name that you'll connect to
+function remoteDeploy {
+    # Check some stuff
+    [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
+    [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
+    local docker="sudo $(which docker || which docker.io)"
+
+    local dockerImage=$1
+    local dockerExPort=$2
+    local nginxConfig=$3
+
+    # Pull the new dockers
+    $docker pull $dockerImage
+
+    # What's the current deploy hosted on?
+    CURRENTPORT=$(sudo sed -nre 's/.*(8[0-9]{3}).*/\1/p' $nginxConfig)
+
+    # Pull out the IP/port of the dockers that are the correct image
+    $docker ps -q |  while read dockid
+    do 
+        ( $docker inspect -f '{{ .Config.Image }}' $dockid \
+            | grep $dockerImage > /dev/null ) && echo $dockid
+    done | while read dockid ;
+    do
+        echo "$dockerImage $dockid docker found" >&2
+        # It's quite hard to access the keys of NetworkSettings.Ports
+        printf "$dockid " ; $docker inspect $dockid \
+            | jq --arg dockerExPort "$dockerExPort/tcp" -r '.[0] 
+| .NetworkSettings.Ports 
+| to_entries 
+| map(select(.key == $dockerExPort)) 
+| .[0] 
+| .value 
+| .[0] 
+| .HostPort'    
+    done | while read dockid port 
+    do
+        echo "$dockid using $port" >&2
+        # Stop any elnode-gnudoc container that's running on a non-live port
+        if [ "$CURRENTPORT" != "$port" ] 
+        then
+            echo "killing $dockid because it's not on $CURRENTPORT" >&2
+            $docker kill $dockid
+        fi
+        echo $dockid $port
+    done | while read dockid port
+    do
+        # When we get here we should only have the live docker running
+        if [ "$CURRENTPORT" == "$port" ]
+        then
+            local newport=$(expr $port + 1) 
+            local ETAG=$(date '+%Y%m%d%H%M%S%N')
+            echo "starting $dockid on $newport avoiding nginx on $CURRENTPORT" >&2
+            # Start the new docker
+            $docker run \
+                -d -p $newport:$dockerExPort \
+                --env ETAG=${ETAG} \
+                -t $dockerImage
+            # ... we could curl check after this
+            # Rewrite the nginx config
+            sudo sed -ibk -re "s/$port/$newport/" $nginxConfig
+            # Restart nginx
+            sudo /etc/init.d/nginx reload
+        fi
+    done
+}
+
+# Function to the initial deploy
+# 
+# Call with:
+#
+# $1  the command, either "build" (just builds the docker)
+#       or "push"  (builds and pushes to remote but doesn't restart)
+#       or "deploy", the default, which builds, pushes and restarts
+# $2  the docker image name to build
+# $3  the docker exported port to connect to
+# $4  the nginx config to hack on the remote
+# $5  the host name of the remote
+function deploy {
+    [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
+    local docker="sudo $(which docker || which docker.io)"
+    
+    local command=$1
+    local dockerImage=$2
+    local dockerExPort=$3
+    local nginxConfig=$4
+    local hostName=$5
+
+    cd $(dirname $0)
+    [ -f Dockerfile ] || { echo "no Dockerfile?" >&2  ; return 1; }
+
+    $docker build --no-cache -t $dockerImage .
+    
+    [ "$command" == "build" ] && echo "docker built" >&2 && exit 1
+    
+    $docker push $dockerImage
+    
+    [ "$command" == "push" ] && echo "docker pushed to $hostName" >&2 && exit 2
+    
+    # Now the remote parts
+    ( typeset -fp remoteDeploy ; \
+        echo remoteDeploy $dockerImage $dockerExPort $nginxConfig \
+        ) | ssh $hostName bash -
+}
+
+# deploy ends here
