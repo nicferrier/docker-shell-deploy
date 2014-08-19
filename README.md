@@ -18,7 +18,7 @@ You need:
 ### how to
 
 ```shell-session
-$ bash <(curl https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
+$ bash <(curl -L https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
 ```
 
 will download the script and ask a few questions:
