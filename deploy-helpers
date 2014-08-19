@@ -56,7 +56,7 @@ function remoteDeploy {
     done | while read dockid port 
     do
         echo "$dockid using $port" >&2
-        # Stop any elnode-gnudoc container that's running on a non-live port
+        # Stop any of our container that's running on a non-live port
         if [ "$CURRENTPORT" != "$port" ] 
         then
             echo "killing $dockid because it's not on $CURRENTPORT" >&2
