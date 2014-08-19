@@ -90,6 +90,13 @@ the deploy:
 $ bash deploy push
 ```
 
+### stuff the deploy doesn't take care of
+
+* creating your live environment outside the docker
+** no nginx setup, for example
+* volume mounting
+** I'm sure we can do this, it seems necessary
+
 
 ## thoughts
 
