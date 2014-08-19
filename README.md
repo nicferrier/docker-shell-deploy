@@ -17,7 +17,7 @@ You need:
 
 ### how to
 
-```ShellSession
+```shell-session
 $ bash <(curl https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
 ```
 
