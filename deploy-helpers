@@ -20,8 +20,10 @@
 function remoteDeploy {
     # Check some stuff
     [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
+    [ -x $(which jq) ] || { echo "no jq?" >&2 ; return 1; }
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
     local docker="sudo $(which docker || which docker.io)"
+    local jq="(which jq)"
 
     local dockerImage=$1
     local dockerExPort=$2
@@ -43,7 +45,7 @@ function remoteDeploy {
         echo "$dockerImage $dockid docker found" >&2
         # It's quite hard to access the keys of NetworkSettings.Ports
         printf "$dockid " ; $docker inspect $dockid \
-            | jq --arg dockerExPort "$dockerExPort/tcp" -r '.[0] 
+            | $jq --arg dockerExPort "$dockerExPort/tcp" -r '.[0] 
 | .NetworkSettings.Ports 
 | to_entries 
 | map(select(.key == $dockerExPort)) 
