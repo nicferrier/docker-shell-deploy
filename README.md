@@ -17,7 +17,7 @@ You need:
 
 ### how to
 
-```shellsession
+```bashsession
 $ bash <(curl https://raw.github.com/nicferrier/docker-shell-deploy/master/deploy-make)
 ```
 
