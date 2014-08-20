@@ -36,56 +36,64 @@ function remoteDeploy {
     $docker pull $dockerImage
 
     # What's the current deploy hosted on?
-    CURRENTPORT=$(sudo sed -nre 's/.*(8[0-9]{3}).*/\1/p' $nginxConfig)
+    local currentIp=$(sudo sed -nre 's|.*proxy_pass http://([^;:]+).*|\1|p' $nginxConfig)
+    [ "$currentIp" == "localhost" ] && currentIp="127.0.0.1"
+    [ "${currentIp%%.*}" -gt 0 ] 2> /dev/null || currentIp=$(
+        getent hosts $currentIp | ( read ip _ ; echo $ip )
+    )
+    echo "currentIp is $currentIp"
 
-    # Pull out the IP/port of the dockers that are the correct image
-    $docker ps -q |  while read dockid
-    do 
-        ( $docker inspect -f '{{ .Config.Image }}' $dockid \
-            | grep $dockerImage > /dev/null ) && echo $dockid
-    done | while read dockid ;
-    do
-        echo "$dockerImage $dockid docker found" >&2
-        # It's quite hard to access the keys of NetworkSettings.Ports
-        printf "$dockid " ; $docker inspect $dockid \
-            | $jq --arg dockerExPort "$dockerExPort/tcp" -r '.[0] 
-| .NetworkSettings.Ports 
-| to_entries 
-| map(select(.key == $dockerExPort)) 
-| .[0] 
-| .value 
-| .[0] 
-| .HostPort'    
-    done | while read dockid port 
-    do
-        echo "$dockid using $port" >&2
-        # Stop any of our container that's running on a non-live port
-        if [ "$CURRENTPORT" != "$port" ] 
-        then
-            echo "killing $dockid because it's not on $CURRENTPORT" >&2
-            $docker kill $dockid
-        fi
-        echo $dockid $port
-    done | while read dockid port
-    do
-        # When we get here we should only have the live docker running
-        if [ "$CURRENTPORT" == "$port" ]
-        then
-            local newport=$(expr $port + 1) 
-            local ETAG=$(date '+%Y%m%d%H%M%S%N')
-            echo "starting $dockid on $newport avoiding nginx on $CURRENTPORT" >&2
-            # Start the new docker
-            $docker run \
-                -d -p $newport:$dockerExPort \
-                --env ETAG=${ETAG} \
-                -t $dockerImage
-            # ... we could curl check after this
-            # Rewrite the nginx config
-            sudo sed -ibk -re "s/$port/$newport/" $nginxConfig
-            # Restart nginx
-            sudo /etc/init.d/nginx reload
-        fi
-    done
+    local ETAG=$(date '+%Y%m%d%H%M%S%N')
+
+    # Check docker volume mounts and turn them into docker opts
+    [ -z $dockerVolumes ] || {
+        echo $dockerVolumes | tr ' ' '\n' | tr ':' ' ' | while read host container
+        do
+            [ -d $host ] || { echo "$host should be a directory and isn't" >&2 ; return 1; }
+        done
+
+        # Everything ok? make a valid docker options string
+        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^| / -v /pg')
+        echo "dockerVolumes is: $dockerVolumes"
+
+        # Kill for now
+        exit 1;
+    }
+
+    # Start the new docker
+    local containerId=$(
+        $docker run -d --env ETAG=${ETAG} ${dockerVolumes} -t $dockerImage
+    )
+    local newIp=$($docker inspect $containerId | $jq -r '.[0] | .NetworkSettings.IPAddress')
+    # FIXME we could curl check the new container after this
+
+    # Rewrite the nginx config and restart
+    sudo sed -ibk -re "s|proxy_pass http://[^:;]+:[0-9]+|proxy_pass http://$newIp:${dockerExPort}|" $nginxConfig
+    sudo /etc/init.d/nginx reload
+
+    # FIXME possibly curl here to check that the new one has worked?
+
+    # Now find the old one and turn it off
+    if [ ! -z $currentIp ]
+    then
+        $docker ps -q |  while read dockId
+        do 
+            ( $docker inspect -f '{{ .Config.Image }}' $dockId \
+                | grep $dockerImage > /dev/null ) && echo $dockId
+        done | while read dockId 
+        do
+            echo "$dockerImage $dockId docker found" >&2
+            printf "$dockId " 
+            $docker inspect $dockId | $jq -r '.[0] | .NetworkSettings.IPAddress'
+        done | while read dockId ipAddress
+        do
+            echo "$dockId using $ipAddress" >&2
+            [ "$currentIp" != "$ipAddress" ] && {
+                echo "killing $dockId because it's not on $currentIp" >&2
+                $docker kill $dockId;
+            }
+        done
+    fi
 }
 
 # Function to the initial deploy
