@@ -17,6 +17,7 @@
 # $1  the docker image name, eg: nicferrier/elnode-gnudoc
 # $2  the docker exported port which you will connect to nginx
 # $3  the nginx config name that you'll connect to
+# $4  docker volume mounts, like: "/host:/container /host:/container"
 function remoteDeploy {
     # Check some stuff
     [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
@@ -28,6 +29,7 @@ function remoteDeploy {
     local dockerImage=$1
     local dockerExPort=$2
     local nginxConfig=$3
+    local dockerVolumes=$4
 
     # Pull the new dockers
     $docker pull $dockerImage
