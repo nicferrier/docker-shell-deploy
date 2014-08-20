@@ -23,6 +23,7 @@ function remoteDeploy {
     [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
     [ -x $(which jq) ] || { echo "no jq?" >&2 ; return 1; }
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
+
     local docker="sudo $(which docker || which docker.io)"
     local jq="(which jq)"
 
