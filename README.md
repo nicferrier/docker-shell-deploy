@@ -9,6 +9,7 @@ You need:
 
 * `bash`
 * `curl`
+* `jq`
 * something that builds with `Dockerfile`
 * something that exports a port with Docker, probably a webapp because this uses nginx
 * a live host to host your container
