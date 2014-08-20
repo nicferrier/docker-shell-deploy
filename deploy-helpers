@@ -35,14 +35,6 @@ function remoteDeploy {
     # Pull the new dockers
     $docker pull $dockerImage
 
-    # What's the current deploy hosted on?
-    local currentIp=$(sudo sed -nre 's|.*proxy_pass http://([^;:]+).*|\1|p' $nginxConfig)
-    [ "$currentIp" == "localhost" ] && currentIp="127.0.0.1"
-    [ "${currentIp%%.*}" -gt 0 ] 2> /dev/null || currentIp=$(
-        getent hosts $currentIp | ( read ip _ ; echo $ip )
-    )
-    echo "currentIp is $currentIp"
-
     local ETAG=$(date '+%Y%m%d%H%M%S%N')
 
     # Check docker volume mounts and turn them into docker opts
@@ -74,7 +66,7 @@ function remoteDeploy {
     # FIXME possibly curl here to check that the new one has worked?
 
     # Now find the old one and turn it off
-    if [ ! -z $currentIp ]
+    if [ ! -z $newIp ]
     then
         $docker ps -q |  while read dockId
         do 
@@ -88,8 +80,8 @@ function remoteDeploy {
         done | while read dockId ipAddress
         do
             echo "$dockId using $ipAddress" >&2
-            [ "$currentIp" != "$ipAddress" ] && {
-                echo "killing $dockId because it's not on $currentIp" >&2
+            [ "$newIp" != "$ipAddress" ] && {
+                echo "killing $dockId because it's not on $newIp" >&2
                 $docker kill $dockId;
             }
         done
