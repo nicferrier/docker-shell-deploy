@@ -107,6 +107,7 @@ function remoteDeploy {
 # $3  the docker exported port to connect to
 # $4  the nginx config to hack on the remote
 # $5  the host name of the remote
+# $6  the volumes to be mounted
 function deploy {
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
     local docker="sudo $(which docker || which docker.io)"
@@ -116,6 +117,7 @@ function deploy {
     local dockerExPort=$3
     local nginxConfig=$4
     local hostName=$5
+    local dockerVolumes=$6
 
     cd $(dirname $0)
     [ -f Dockerfile ] || { echo "no Dockerfile?" >&2  ; return 1; }
@@ -130,7 +132,7 @@ function deploy {
     
     # Now the remote parts
     ( typeset -fp remoteDeploy ; \
-        echo remoteDeploy $dockerImage $dockerExPort $nginxConfig \
+        echo remoteDeploy $dockerImage $dockerExPort $nginxConfig $dockerVolumes \
         ) | ssh $hostName bash -
 }
 
