@@ -66,7 +66,7 @@ function remoteDeploy {
     # FIXME possibly curl here to check that the new one has worked?
 
     # Now find the old one and turn it off
-    if [ ! -z $newIp ]
+    if [ -n $newIp ]
     then
         $docker ps -q |  while read dockId
         do 
