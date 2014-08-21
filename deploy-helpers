@@ -17,7 +17,7 @@
 # $1  the docker image name, eg: nicferrier/elnode-gnudoc
 # $2  the docker exported port which you will connect to nginx
 # $3  the nginx config name that you'll connect to
-# $4  docker volume mounts, like: "/host:/container;/host:/container"
+# $4  docker volume mounts, like: "/host:/container+/host:/container"
 function remoteDeploy {
     # Check some stuff
     [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
@@ -39,13 +39,13 @@ function remoteDeploy {
 
     # Check docker volume mounts and turn them into docker opts
     [ -z $dockerVolumes ] || {
-        echo $dockerVolumes | tr ';' '\n' | tr ':' ' ' | while read host container
+        echo $dockerVolumes | tr '+' '\n' | tr ':' ' ' | while read host container
         do
             [ -d $host ] || { echo "$host should be a directory and isn't" >&2 ; return 1; }
         done
 
         # Everything ok? make a valid docker options string
-        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|;/ -v /pg')
+        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|+/ -v /pg')
         echo "dockerVolumes is: $dockerVolumes"
 
         # Kill for now
@@ -99,7 +99,7 @@ function remoteDeploy {
 # $3  the docker exported port to connect to
 # $4  the nginx config to hack on the remote
 # $5  the host name of the remote
-# $6  the volumes to be mounted separated by ;
+# $6  the volumes to be mounted separated by +
 function deploy {
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
     local docker="sudo $(which docker || which docker.io)"
