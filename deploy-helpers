@@ -111,17 +111,20 @@ function deploy {
     local hostName=$5
     local dockerVolumes=$6
 
-    cd $(dirname $0)
-    [ -f Dockerfile ] || { echo "no Dockerfile?" >&2  ; return 1; }
+    if [ "$command" != "remote" ]
+    then
+        cd $(dirname $0)
+        [ -f Dockerfile ] || { echo "no Dockerfile?" >&2  ; return 1; }
+        
+        $docker build --no-cache -t $dockerImage .
+        
+        [ "$command" == "build" ] && echo "docker built" >&2 && exit 1
+        
+        $docker push $dockerImage
+        
+        [ "$command" == "push" ] && echo "docker pushed to $hostName" >&2 && exit 2
+    fi
 
-    $docker build --no-cache -t $dockerImage .
-    
-    [ "$command" == "build" ] && echo "docker built" >&2 && exit 1
-    
-    $docker push $dockerImage
-    
-    [ "$command" == "push" ] && echo "docker pushed to $hostName" >&2 && exit 2
-    
     # Now the remote parts
     ( typeset -fp remoteDeploy ; \
         echo remoteDeploy $dockerImage $dockerExPort $nginxConfig $dockerVolumes \
