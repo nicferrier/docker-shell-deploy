@@ -25,7 +25,7 @@ function remoteDeploy {
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
 
     local docker="sudo $(which docker || which docker.io)"
-    local jq="(which jq)"
+    local jq="$(which jq)"
 
     local dockerImage=$1
     local dockerExPort=$2
