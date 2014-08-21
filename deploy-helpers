@@ -45,11 +45,8 @@ function remoteDeploy {
         done
 
         # Everything ok? make a valid docker options string
-        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|+/ -v /pg')
+        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|\+/ -v /pg')
         echo "dockerVolumes is: $dockerVolumes"
-
-        # Kill for now
-        exit 1;
     }
 
     # Start the new docker
