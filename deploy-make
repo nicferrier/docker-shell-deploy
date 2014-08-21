@@ -22,7 +22,7 @@ dockerVolumes=""
 exec 4<&0-
 while read mapping
 do
-    dockerVolumes="$dockerVolumes $mapping"
+    dockerVolumes="$dockerVolumes;$mapping"
 done < <(sed -rne 's/VOLUME (.*)/\1/p' Dockerfile | while read volume
 do
   read -u 4 -p "host mapping for ${volume}: " mapping
