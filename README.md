@@ -8,6 +8,14 @@ but without being bound to heroku and having to pay for an account to
 scale and all those things.
 
 
+## changelog
+
+*2014 August* - handle nginx configs with upstreams instead of direct
+HTTP addresses in backend statements. The support isn't great but
+without parsing the nginx config totally (and the best placed thing to
+do that would be nginx) there's not a lot we can do better.
+
+
 ### requirements
 
 You need:
