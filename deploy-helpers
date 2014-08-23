@@ -57,7 +57,15 @@ function remoteDeploy {
     # FIXME we could curl check the new container after this
 
     # Rewrite the nginx config and restart
-    sudo sed -ibk -re "s|proxy_pass http://[^:;]*:[0-9]+|proxy_pass http://$newIp:${dockerExPort}|" $nginxConfig
+    grep upstream $nginxConfig > /dev/null && upstreams=$?
+    
+    if [ $upstreams ] 
+    then
+        sudo sed -ibk -re "s|server [^:;]*:[0-9]+|server $newIp:${dockerExPort}|" $nginxConfig
+    else
+        sudo sed -ibk -re "s|proxy_pass http://[^:;]*:[0-9]+|proxy_pass http://$newIp:${dockerExPort}|" $nginxConfig
+    fi        
+
     sudo /etc/init.d/nginx reload
 
     # FIXME possibly curl here to check that the new one has worked?
