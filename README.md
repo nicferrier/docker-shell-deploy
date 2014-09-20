@@ -10,6 +10,11 @@ scale and all those things.
 
 ## changelog
 
+*2014 September* - make the deployment start a daemon on the remote
+host to continually ping the docker's HTTP and restart it. The daemon
+has a fifo that it reads for commands, you can get a list of commands
+by sending it "help". Everything is stored in `/tmp/ddctrl/{name-of-image}`
+
 *2014 August* - handle nginx configs with upstreams instead of direct
 HTTP addresses in backend statements. The support isn't great but
 without parsing the nginx config totally (and the best placed thing to
