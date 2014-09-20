@@ -19,79 +19,184 @@
 # $3  the nginx config name that you'll connect to
 # $4  docker volume mounts, like: "/host:/container+/host:/container"
 function remoteDeploy {
-    # Check some stuff
+    local dockerImage=$1
+    local dockerExPort=$2
+    local nginxConfig=$3
+    local dockerVolumes=$4
+
     [ -x /etc/init.d/nginx ] || { echo "no nginx?" >&2 ; return 1; }
     [ -x $(which jq) ] || { echo "no jq?" >&2 ; return 1; }
     [ -x $(which docker || which docker.io) ] || { echo "no docker?" >&2 ; return 1; }
 
     local docker="sudo $(which docker || which docker.io)"
     local jq="$(which jq)"
+    local stateDir=/tmp/ddctrl/$(echo $dockerImage | sed -rne "s|/|__|pg")
 
-    local dockerImage=$1
-    local dockerExPort=$2
-    local nginxConfig=$3
-    local dockerVolumes=$4
+    # FIXME: this is not a great way to identify the current
+    # container... we could ask nginx?
+    local containerId=$($docker ps | grep $dockerImage | cut -f 1 | head -n1)
 
-    # Pull the new dockers
-    $docker pull $dockerImage
+    function daemon {
+        local ETAG=$(date '+%Y%m%d%H%M%S%N')
 
-    local ETAG=$(date '+%Y%m%d%H%M%S%N')
+        # Daemon stuff
+        mkdir -p $stateDir
+        echo $$ > $stateDir/pid
+        exec 3>&-   # close stdin
+        exec 2>>$stateDir/stderr
+        exec 1>>$stateDir/stdout
+        echo $(date) daemonized
 
-    # Check docker volume mounts and turn them into docker opts
-    [ -z $dockerVolumes ] || {
-        echo $dockerVolumes | tr '+' '\n' | tr ':' ' ' | while read host container
+        # Setup the fifo if it doesn't exist
+        local fifo=$stateDir/fifo
+        [ -p $fifo ] || mkfifo $fifo
+
+        # Check docker volume mounts and turn them into docker opts
+        [ -z $dockerVolumes ] || {
+            echo $dockerVolumes | tr '+' '\n' | tr ':' ' ' | while read host container
+            do
+                [ -d $host ] || { echo "$host should be a directory and isn't" >&2 ; return 1; }
+            done
+
+            # Everything ok? make a valid docker options string
+            dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|\+/ -v /pg')
+        }
+
+        # Now the library of functions we need
+        function containerToHost {
+            local containerIdent=$1
+            $docker inspect $containerIdent | jq -r '.[0] | .NetworkSettings.IPAddress'
+        }
+
+        function curlCheck {
+            local containerIp=$1
+            local port=$2
+            local output=$(curl -s --connect-timeout 320 -m 380 \
+                http://$containerIp:$port 2>&1 | head -n1)
+            local result=$?
+            echo "$(date) curlCheck $containerIp $port => $output $result"
+            return $result
+        }
+
+        function nginx {
+            local newIp=$1
+            local upstreams=0
+
+            grep "upstream" $nginxConfig > /dev/null
+            upstreams=$?
+            if [ $upstreams -eq 0 ]
+            then
+                sudo sed -ibk \
+                    -re "s|server [^:;]*:[0-9]+|server ${newIp}:${dockerExPort}|" $nginxConfig
+            else
+                sudo sed -ibk \
+                    -re "s|proxy_pass http://[^:;]*:[0-9]+|proxy_pass http://$newIp:${dockerExPort}|" $nginxConfig
+            fi        
+            echo "$(date) nginx $nginxConfig upstreams=$upstreams"
+            sudo /etc/init.d/nginx reload
+        }
+
+        function dockerRun {
+            $docker run -d --env ETAG=${ETAG} ${dockerVolumes} -t $dockerImage
+        }
+
+        function dockerStart {
+            local newContainerId=$(dockerRun)
+            local newIp=$(containerToHost $newContainerId)
+            echo $(date) dockerStart newIp: $newIp newContainerId: $newContainerId
+            curlCheck $newIp $dockerExPort \
+                && nginx $newIp
+            [ $? -eq 0 ] && containerId=$newContainerId
+        }
+
+        function dockerClean {
+            local newIp=$(containerToHost $containerId)
+            $docker ps -q |  while read dockId
+            do 
+                ( $docker inspect -f '{{ .Config.Image }}' $dockId \
+                    | grep $dockerImage > /dev/null ) && echo $dockId
+            done | while read dockId 
+            do
+                # $dockId is a $dockerImage container
+                printf "$dockId " 
+                $docker inspect $dockId | $jq -r '.[0] | .NetworkSettings.IPAddress'
+            done | while read dockId ipAddress
+            do
+                echo "$(date) dockerClean $newIp $dockId $ipAddress"
+                # Now we have the dockId and the ipAddress
+                [ "$newIp" != "$ipAddress" ] && {
+                    # killing $dockId because it's not on $newIp
+                    $docker kill $dockId;
+                }
+            done
+        }
+
+        function dockerRestart {
+            echo $(date) dockerRestart
+            dockerStart && dockerClean
+        }
+
+        function dockerCheck {
+            echo "$(date) dockerCheck [$containerId]"
+            [ "$containerId" == "" ] && return 1
+            local containerIp=$(containerToHost $containerId)
+            curlCheck $containerIp $dockerExPort || dockerRestart
+        }
+
+        # Daemon loop
+        while [ 1 ]
         do
-            [ -d $host ] || { echo "$host should be a directory and isn't" >&2 ; return 1; }
+            read -t 30 command args <>$fifo
+            case $command in
+                run)
+                    dockerRun
+                    ;;
+
+                start)
+                    dockerStart
+                    ;;
+
+                check)
+                    dockerCheck
+                    ;;
+
+                stop)
+                    break
+                    ;;
+
+                pull)
+                    sudo docker pull $dockerImage
+                    ;;
+
+                restart)
+                    dockerRestart
+                    ;;
+                
+                help)
+                    echo $dockerImage control daemon
+                    echo "command: start|stop|help|pull|run|check to $fifo"
+                    ;;
+            esac
+            
+            # Check every now and then... maybe this needs to be a separate daemon?
+            dockerCheck
         done
 
-        # Everything ok? make a valid docker options string
-        dockerVolumes=$(echo $dockerVolumes | sed -rne 's/^|\+/ -v /pg')
-        echo "dockerVolumes is: $dockerVolumes"
+        # Must be exiting?
+        rm -rf $stateDir/pid
     }
 
-    # Start the new docker
-    local containerId=$(
-        $docker run -d --env ETAG=${ETAG} ${dockerVolumes} -t $dockerImage
-    )
-    local newIp=$($docker inspect $containerId | $jq -r '.[0] | .NetworkSettings.IPAddress')
-    # FIXME we could curl check the new container after this
+    function daemonCheck {
+        ps -$(cat $stateDir/pid) > /dev/null
+    }
 
-    # Rewrite the nginx config and restart
-    grep upstream $nginxConfig > /dev/null && upstreams=$?
+    # Stop a running daemon because we might have updated this
+    [[ -f $stateDir/pid && daemonCheck ]]  && { echo stop > $stateDir/fifo; }
     
-    if [ $upstreams ] 
-    then
-        sudo sed -ibk -re "s|server [^:;]*:[0-9]+|server $newIp:${dockerExPort}|" $nginxConfig
-    else
-        sudo sed -ibk -re "s|proxy_pass http://[^:;]*:[0-9]+|proxy_pass http://$newIp:${dockerExPort}|" $nginxConfig
-    fi        
-
-    sudo /etc/init.d/nginx reload
-
-    # FIXME possibly curl here to check that the new one has worked?
-
-    # Now find the old one and turn it off
-    if [ -n $newIp ]
-    then
-        $docker ps -q |  while read dockId
-        do 
-            ( $docker inspect -f '{{ .Config.Image }}' $dockId \
-                | grep $dockerImage > /dev/null ) && echo $dockId
-        done | while read dockId 
-        do
-            echo "$dockerImage $dockId docker found" >&2
-            printf "$dockId " 
-            $docker inspect $dockId | $jq -r '.[0] | .NetworkSettings.IPAddress'
-        done | while read dockId ipAddress
-        do
-            echo "$dockId using $ipAddress" >&2
-            [ "$newIp" != "$ipAddress" ] && {
-                echo "killing $dockId because it's not on $newIp" >&2
-                $docker kill $dockId;
-            }
-        done
-    fi
+    daemon &
+    echo restart > $stateDir/fifo
 }
+
 
 # Function to the initial deploy
 # 
