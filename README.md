@@ -88,11 +88,13 @@ So what does it do?
 
 * builds the current Dockerfile to `docker image`
 * pushes the `docker image` to the [docker registry](https://registry.hub.docker.com/)
-* pushes a function to the `remote host name` with ssh and executes it to:
+* pushes a function to the `remote host name` with ssh and executes it to start a daemon to:
  * pull the new `docker image` from the docker registry
  * start the pulled `docker image` as a container
  * alter the `nginx config` to proxy the newly exported port
  * restart nginx
+ * monitor the started docker for http
+ * restart the docker when it fails (and update nginx)
 
 ### other stuff the deploy script supports
 
