@@ -73,10 +73,12 @@ function remoteDeploy {
         function curlCheck {
             local containerIp=$1
             local port=$2
-            local output=$(curl -s --connect-timeout 320 -m 380 \
-                http://$containerIp:$port 2>&1 | head -n1)
-            local result=$?
-            echo "$(date) curlCheck $containerIp $port => $output $result"
+            local connectTimeout=10  #320
+            local timeout=10 #380
+            local output=""
+            output=$(curl -s -f --connect-timeout 10 -m 10 http://$containerIp:$port | head -n1)
+            local result=${PIPESTATUS[0]}
+            echo "$(date) curlCheck $containerIp $port => [$output] [$result]"
             return $result
         }
 
