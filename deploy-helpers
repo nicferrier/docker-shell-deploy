@@ -150,7 +150,7 @@ function remoteDeploy {
         # Daemon loop
         while [ 1 ]
         do
-            read -t 60 command args <>$fifo
+            read -t 30 command args <>$fifo
             case $command in
                 run)
                     dockerRun
