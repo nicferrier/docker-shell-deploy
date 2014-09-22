@@ -245,7 +245,7 @@ function deploy {
     # Now the remote parts
     ( typeset -fp remoteDeploy ; \
         echo remoteDeploy $dockerImage $dockerExPort $nginxConfig $dockerVolumes \
-        ) | ssh $hostName bash -
+        ) | ssh $hostName bash -s
 }
 
 # deploy ends here
