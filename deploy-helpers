@@ -34,13 +34,15 @@ function remoteDeploy {
 
     # FIXME: this is not a great way to identify the current
     # container... we could ask nginx?
-    local containerId=$($docker ps | grep $dockerImage | cut -f 1 | head -n1)
-
+    local containerId=$($docker ps | grep $dockerImage | cut -d ' ' -f 1 | head -n1)
+    
     function daemon {
+        echo "inside daemon"
         local ETAG=$(date '+%Y%m%d%H%M%S%N')
 
         # Daemon stuff
         mkdir -p $stateDir
+        [ -f $stateDir/pid ] && mv $stateDir/pid $stateDir/old.pid.$(date '+%Y%m%d-%H%M-%S')
         echo $$ > $stateDir/pid
         exec 3>&-   # close stdin
         exec 2>>$stateDir/stderr
