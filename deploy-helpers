@@ -187,18 +187,21 @@ function remoteDeploy {
         done
 
         # Must be exiting?
-        rm -rf $stateDir/pid
+        mv $stateDir/pid $stateDir/old.pid.$(date '+%Y%m%d-%H%M-%S')
     }
 
     function daemonCheck {
-        ps -$(cat $stateDir/pid) > /dev/null
+        [ -f $stateDir/pid ] && ps -$(cat $stateDir/pid) > /dev/null
     }
 
-    # Stop a running daemon because we might have updated this
-    [[ -f $stateDir/pid && daemonCheck ]]  && { echo stop > $stateDir/fifo; }
-    
+    daemonCheck
+    [ $? -ne 0 ] || { 
+        echo "daemon already running";
+        echo stop > $stateDir/fifo; 
+    }
+
     daemon &
-    echo restart > $stateDir/fifo
+    # echo restart > $stateDir/fifo
 }
 
 
