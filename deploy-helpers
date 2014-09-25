@@ -73,13 +73,42 @@ function remoteDeploy {
         function curlCheck {
             local containerIp=$1
             local port=$2
-            local connectTimeout=10  #320
-            local timeout=10 #380
+            local connectTimeout=${3:-20}
+            local timeout=$(expr $connectTimeout + 10)
             local output=""
-            output=$(curl -s -f --connect-timeout 10 -m 10 http://$containerIp:$port | head -n1)
-            local result=${PIPESTATUS[0]}
-            echo "$(date) curlCheck $containerIp $port => [$output] [$result]"
-            return $result
+            local curlResult=0
+            local awkResult=0
+            local http=$stateDir/httpout
+            curl -i -m $timeout \
+                --connect-timeout $connectTimeout \
+                http://$containerIp:$port 2> /dev/null > $http
+            curlResult=$?
+            local tries=0
+            while [[ $curlResult -eq 7 && $tries < 3 ]] # if it was connect fail try again
+            do
+                sleep 1
+                curl -i -m $timeout \
+                    --connect-timeout $connectTimeout \
+                    http://$containerIp:$port 2> /dev/null > $http
+                curlResult=$?
+                tries=$(expr $tries + 1)
+            done
+            output=$(awk 'BEGIN { lastline="start"; }
+/^HTTP[/]1.1 [45]0[0-9]/ { print $0; exit(9); }
+/<[Hh]1>Server error<[/][Hh]1>/ { print $0; exit(9); }
+{ gsub("[\r\n]$", ""); }
+lastline=="" { print $0; exit(0); }
+{ lastline=$0; }' $http)
+            awkResult=$?
+            if [ $curlResult -ne 0 ]
+            then
+                echo ">>> [$curlResult]"
+                cat $http
+                echo "<<<"
+            fi
+            local returnResult=$(($curlResult||$awkResult))
+            echo "$(date) curlCheck $containerIp $port $connectTimeout $timeout => [$output] [$returnResult]"
+            return $returnResult
         }
 
         function nginx {
@@ -108,8 +137,7 @@ function remoteDeploy {
             local newContainerId=$(dockerRun)
             local newIp=$(containerToHost $newContainerId)
             echo $(date) dockerStart newIp: $newIp newContainerId: $newContainerId
-            curlCheck $newIp $dockerExPort \
-                && nginx $newIp
+            curlCheck $newIp $dockerExPort 350 && nginx $newIp
             [ $? -eq 0 ] && containerId=$newContainerId
         }
 
@@ -137,14 +165,21 @@ function remoteDeploy {
 
         function dockerRestart {
             echo $(date) dockerRestart
-            dockerStart && dockerClean
+            dockerStart
+            dockerClean
         }
 
         function dockerCheck {
             echo "$(date) dockerCheck [$containerId]"
-            [ "$containerId" == "" ] && return 1
+            [ "$containerId" == "" ] && dockerRestart
             local containerIp=$(containerToHost $containerId)
-            curlCheck $containerIp $dockerExPort || dockerRestart
+            curlCheck $containerIp $dockerExPort 10
+            if [ $? -ne 0 ]
+            then
+                 dockerRestart
+            else
+                echo "$(date) dockerCheck done - all ok"
+            fi
         }
 
         # Daemon loop
