@@ -119,8 +119,8 @@ $ bash deploy push
 ### stuff the deploy doesn't take care of
 
 * creating your live environment outside the docker
-** no nginx setup
-** no creation of volume exported directories
+ * no nginx setup
+ * no creation of volume exported directories
 
 ## thoughts
 
