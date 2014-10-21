@@ -137,7 +137,8 @@ lastline=="" { print $0; exit(0); }
             local newContainerId=$(dockerRun)
             local newIp=$(containerToHost $newContainerId)
             echo $(date) dockerStart newIp: $newIp newContainerId: $newContainerId
-            curlCheck $newIp $dockerExPort 350 && nginx $newIp
+            sleep 3
+            curlCheck $newIp $dockerExPort 450 && nginx $newIp
             [ $? -eq 0 ] && containerId=$newContainerId
         }
 
@@ -236,7 +237,8 @@ lastline=="" { print $0; exit(0); }
     }
 
     daemon &
-    # echo restart > $stateDir/fifo
+    sudo docker pull $dockerImage # by the time this has finished we've got the daemon up
+    echo restart > $stateDir/fifo
 }
 
 
